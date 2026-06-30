@@ -35,6 +35,17 @@ public:
     /** @brief Destructor. */
     ~MainWindow() override;
 
+    /**
+     * @brief Applies a two-pass box blur to @p source.
+     *
+     * Exposed as public to allow unit testing without a running QApplication.
+     *
+     * @param source     Input image (not modified).
+     * @param blurRadius Blur intensity in [0, 10]; 0 returns the original.
+     * @return Blurred copy of @p source.
+     */
+    [[nodiscard]] static QImage blurImage(QImage source, int blurRadius);
+
 private slots:
     /**
      * @brief Opens a file dialog to select an image file.
@@ -48,14 +59,6 @@ private slots:
     void onBlurSliderValueChanged(int value);
 
 private:
-    /**
-     * @brief Applies a two-pass box blur to @p source.
-     * @param source     Input image (not modified).
-     * @param blurRadius Blur intensity in [0, 10]; 0 returns the original.
-     * @return Blurred copy of @p source.
-     */
-    [[nodiscard]] static QImage blurImage(QImage source, int blurRadius);
-
     /**
      * @brief Launches an async blur and updates the image label on completion.
      *
