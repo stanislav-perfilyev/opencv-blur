@@ -1,65 +1,74 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QMainWindow>
+#include <QFuture>
 #include <QImage>
+#include <QMainWindow>
+
+Q_DECLARE_LOGGING_CATEGORY(lcBlur)
 
 namespace Ui {
-    class MainWindow;
+class MainWindow;
 }
 
 /**
  * @class MainWindow
- * @brief Main application window for image blur effect
+ * @brief Main application window for image blur effect.
  *
- * Provides UI for loading images and applying blur effect with adjustable intensity
+ * Provides UI for loading images and applying a box-blur effect with
+ * adjustable intensity via a slider.  The blur runs asynchronously on a
+ * thread-pool so the UI stays responsive.
+ *
+ * Non-copyable and non-movable (Qt widget ownership semantics).
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
+    Q_DISABLE_COPY_MOVE(MainWindow)
 
 public:
     /**
-     * @brief Constructs the MainWindow
-     * @param parent Parent widget (default: nullptr)
+     * @brief Constructs the MainWindow.
+     * @param parent Parent widget (default: nullptr).
      */
     explicit MainWindow(QWidget *parent = nullptr);
 
-    /**
-     * @brief Destructor for MainWindow
-     */
-    ~MainWindow();
+    /** @brief Destructor. */
+    ~MainWindow() override;
 
 private slots:
     /**
-     * @brief Slot called when Browse button is clicked
-     * Opens file dialog to select an image file
+     * @brief Opens a file dialog to select an image file.
      */
     void onBrowseButtonClicked();
 
     /**
-     * @brief Slot called when blur slider value changes
-     * @param value New blur radius value (0-10)
+     * @brief Re-applies the blur whenever the slider moves.
+     * @param value New blur radius in [0, 10].
      */
     void onBlurSliderValueChanged(int value);
 
 private:
-    Ui::MainWindow *ui;                           ///< UI pointer
-    QImage sourceImage;                           ///< Loaded source image
-
     /**
-     * @brief Applies blur effect to an image
-     * @param source Source image to blur
-     * @param blurRadius Blur intensity (0-10)
-     * @return Blurred image
+     * @brief Applies a two-pass box blur to @p source.
+     * @param source     Input image (not modified).
+     * @param blurRadius Blur intensity in [0, 10]; 0 returns the original.
+     * @return Blurred copy of @p source.
      */
-    static QImage blurImage(QImage source, int blurRadius);
+    [[nodiscard]] static QImage blurImage(QImage source, int blurRadius);
 
     /**
-     * @brief Updates the displayed image with blur effect
-     * @param blurRadius Blur intensity value
+     * @brief Launches an async blur and updates the image label on completion.
+     *
+     * Cancels any in-flight blur before starting a new one so rapid slider
+     * movements do not pile up work on the thread pool.
+     *
+     * @param blurRadius Blur intensity to apply.
      */
     void updateDisplayImage(int blurRadius);
+
+    Ui::MainWindow           *ui_;           ///< UI pointer (owned)
+    QImage                    sourceImage_;  ///< Loaded source image
+    QFuture<void>             blurFuture_;  ///< Handle to the current async blur task
 };
 
 #endif // MAINWINDOW_H
-

@@ -1,160 +1,148 @@
 #include "../include/mainwindow.h"
 #include "ui_blur.h"
+
 #include <QFileDialog>
-#include <QPixmap>
-#include <QDebug>
+#include <QFuture>
 #include <QImageReader>
+#include <QLoggingCategory>
 #include <QMessageBox>
+#include <QMetaObject>
+#include <QPixmap>
 #include <QtConcurrentRun>
 
+Q_LOGGING_CATEGORY(lcBlur, "app.blur")
+
+// ── Constructor / Destructor ───────────────────────────────────────────────
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow) {
-    ui->setupUi(this);
-
-    // Application closes when main window is closed
+    : QMainWindow(parent)
+    , ui_(new Ui::MainWindow)
+{
+    ui_->setupUi(this);
     setAttribute(Qt::WA_QuitOnClose, true);
+    ui_->blurSlider->setValue(0);
 
-    // Set initial slider value
-    ui->blurSlider->setValue(0);
-
-    // Connect signals to slots
-    connect(ui->browseButton, &QPushButton::clicked, this, &MainWindow::onBrowseButtonClicked);
-    connect(ui->blurSlider, QOverload<int>::of(&QSlider::valueChanged),
+    connect(ui_->browseButton, &QPushButton::clicked,
+            this, &MainWindow::onBrowseButtonClicked);
+    connect(ui_->blurSlider, QOverload<int>::of(&QSlider::valueChanged),
             this, &MainWindow::onBlurSliderValueChanged);
 }
 
-MainWindow::~MainWindow() {
-    delete ui;
+MainWindow::~MainWindow()
+{
+    // Wait for any in-flight blur to finish before destroying the UI.
+    if (blurFuture_.isRunning())
+        blurFuture_.waitForFinished();
+    delete ui_;
 }
 
-void MainWindow::onBrowseButtonClicked() {
-    QString fileName = QFileDialog::getOpenFileName(this,
-        tr("Open Image"), "",
-        tr("Image Files (*.png *.jpg *.jpeg *.bmp *.gif);;JPEG Files (*.jpg *.jpeg);;PNG Files (*.png);;All Files (*)"));
+// ── Slots ──────────────────────────────────────────────────────────────────
 
-    if (!fileName.isEmpty()) {
-        qDebug() << "Loading image from:" << fileName;
+void MainWindow::onBrowseButtonClicked()
+{
+    const QString fileName = QFileDialog::getOpenFileName(
+        this,
+        tr("Open Image"), {},
+        tr("Image Files (*.png *.jpg *.jpeg *.bmp *.gif);;"
+           "JPEG Files (*.jpg *.jpeg);;PNG Files (*.png);;All Files (*)"));
 
-        // Create QImageReader for better error diagnostics
-        QImageReader reader(fileName);
-        reader.setAutoTransform(true);
+    if (fileName.isEmpty())
+        return;
 
-        sourceImage = reader.read();
+    qCDebug(lcBlur) << "Loading image from:" << fileName;
 
-        if (sourceImage.isNull()) {
-            QString errorMsg = QString("Failed to load image.\nFile: %1\nError: %2")
-                    .arg(fileName, reader.errorString());
-            qDebug() << errorMsg;
-            ui->imageLabel->setText(errorMsg);
-            QMessageBox::warning(this, "Error", errorMsg);
-        } else {
-            qDebug() << "Image loaded successfully. Size:" << sourceImage.width() << "x" << sourceImage.height();
-            ui->blurSlider->setValue(0);
-            updateDisplayImage(0);
-        }
+    QImageReader reader(fileName);
+    reader.setAutoTransform(true);
+    sourceImage_ = reader.read();
+
+    if (sourceImage_.isNull()) {
+        const QString msg = tr("Failed to load image.\nFile: %1\nError: %2")
+                                .arg(fileName, reader.errorString());
+        qCWarning(lcBlur) << msg;
+        ui_->imageLabel->setText(msg);
+        QMessageBox::warning(this, tr("Error"), msg);
+        return;
     }
+
+    qCInfo(lcBlur) << "Image loaded:" << sourceImage_.width()
+                   << "x" << sourceImage_.height();
+    ui_->blurSlider->setValue(0);
+    updateDisplayImage(0);
 }
 
-void MainWindow::onBlurSliderValueChanged(int value) {
-    if (!sourceImage.isNull()) {
+void MainWindow::onBlurSliderValueChanged(int value)
+{
+    if (!sourceImage_.isNull())
         updateDisplayImage(value);
-    }
 }
 
-QImage MainWindow::blurImage(QImage source, int blurRadius) {
-    if (source.isNull() || blurRadius <= 0) {
+// ── Private helpers ────────────────────────────────────────────────────────
+
+QImage MainWindow::blurImage(QImage source, int blurRadius)
+{
+    if (source.isNull() || blurRadius <= 0)
         return source;
-    }
 
-    // Increase blur radius for better effect
-    int radius = blurRadius * 2;
+    const int radius = blurRadius * 2;
+    const int width  = source.width();
+    const int height = source.height();
 
-    QImage result = source.copy();
-    int width = source.width();
-    int height = source.height();
-
-    // First pass - horizontal blur
+    // First pass — horizontal blur
     QImage horizontal(width, height, QImage::Format_ARGB32);
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            int sumR = 0, sumG = 0, sumB = 0, sumA = 0;
-            int count = 0;
-
-            // Get pixels in horizontal band
+            int sumR = 0, sumG = 0, sumB = 0, sumA = 0, count = 0;
             for (int dx = -radius; dx <= radius; ++dx) {
-                int nx = qBound(0, x + dx, width - 1);
-                QColor color(source.pixel(nx, y));
-                sumR += color.red();
-                sumG += color.green();
-                sumB += color.blue();
-                sumA += color.alpha();
-                count++;
+                const QColor c(source.pixel(qBound(0, x + dx, width - 1), y));
+                sumR += c.red();   sumG += c.green();
+                sumB += c.blue();  sumA += c.alpha();
+                ++count;
             }
-
-            // Average the values
-            QColor blurredColor(
-                sumR / count,
-                sumG / count,
-                sumB / count,
-                sumA / count
-            );
-            horizontal.setPixelColor(x, y, blurredColor);
+            horizontal.setPixelColor(x, y,
+                QColor(sumR / count, sumG / count, sumB / count, sumA / count));
         }
     }
 
-    // Second pass - vertical blur
+    // Second pass — vertical blur
+    QImage result(width, height, QImage::Format_ARGB32);
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            int sumR = 0, sumG = 0, sumB = 0, sumA = 0;
-            int count = 0;
-
-            // Get pixels in vertical band
+            int sumR = 0, sumG = 0, sumB = 0, sumA = 0, count = 0;
             for (int dy = -radius; dy <= radius; ++dy) {
-                int ny = qBound(0, y + dy, height - 1);
-                QColor color(horizontal.pixel(x, ny));
-                sumR += color.red();
-                sumG += color.green();
-                sumB += color.blue();
-                sumA += color.alpha();
-                count++;
+                const QColor c(horizontal.pixel(x, qBound(0, y + dy, height - 1)));
+                sumR += c.red();   sumG += c.green();
+                sumB += c.blue();  sumA += c.alpha();
+                ++count;
             }
-
-            // Average the values
-            QColor blurredColor(
-                sumR / count,
-                sumG / count,
-                sumB / count,
-                sumA / count
-            );
-            result.setPixelColor(x, y, blurredColor);
+            result.setPixelColor(x, y,
+                QColor(sumR / count, sumG / count, sumB / count, sumA / count));
         }
     }
 
     return result;
 }
 
-void MainWindow::updateDisplayImage(int blurRadius) {
-    if (sourceImage.isNull()) {
+void MainWindow::updateDisplayImage(int blurRadius)
+{
+    if (sourceImage_.isNull())
         return;
-    }
 
-    // Apply blur asynchronously to prevent UI freezing
-    QtConcurrent::run([this, blurRadius]() {
-        QImage blurred = blurImage(sourceImage, blurRadius);
+    // Cancel the previous task if it is still running so rapid slider moves
+    // do not pile up work on the thread pool.
+    if (blurFuture_.isRunning())
+        blurFuture_.cancel();
 
-        // Scale image to label size
-        QPixmap pixmap = QPixmap::fromImage(blurred).scaled(
-            ui->imageLabel->width(),
-            ui->imageLabel->height(),
+    blurFuture_ = QtConcurrent::run([this, blurRadius]() {
+        const QImage blurred = blurImage(sourceImage_, blurRadius);
+
+        const QPixmap pixmap = QPixmap::fromImage(blurred).scaled(
+            ui_->imageLabel->width(),
+            ui_->imageLabel->height(),
             Qt::KeepAspectRatio,
-            Qt::SmoothTransformation
-        );
+            Qt::SmoothTransformation);
 
-        // Update UI in main thread
-        QMetaObject::invokeMethod(ui->imageLabel, [this, pixmap]() {
-            ui->imageLabel->setPixmap(pixmap);
+        QMetaObject::invokeMethod(ui_->imageLabel, [this, pixmap]() {
+            ui_->imageLabel->setPixmap(pixmap);
         }, Qt::QueuedConnection);
     });
 }
-
