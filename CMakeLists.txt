@@ -11,11 +11,13 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR})
 if(NOT DEFINED QT_PATH)
     if(DEFINED ENV{QT_PATH})
         set(QT_PATH $ENV{QT_PATH})
-    else()
+    elseif(WIN32)
         set(QT_PATH "D:/Qt/6.10.2/mingw_64")
     endif()
 endif()
-set(CMAKE_PREFIX_PATH "${QT_PATH}/lib/cmake")
+if(DEFINED QT_PATH AND NOT QT_PATH STREQUAL "")
+    list(APPEND CMAKE_PREFIX_PATH "${QT_PATH}/lib/cmake")
+endif()
 
 find_package(Qt6 COMPONENTS Core Gui Widgets Concurrent REQUIRED)
 
@@ -27,6 +29,10 @@ qt_add_library(blur_lib STATIC
 )
 target_include_directories(blur_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(blur_lib PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent)
+target_compile_options(blur_lib PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Werror>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+)
 
 # ── Application ───────────────────────────────────────────────────────────
 qt_add_executable(Blur src/main.cpp)
@@ -88,5 +94,9 @@ enable_testing()
 
 qt_add_executable(test_blur tests/test_blur.cpp)
 target_link_libraries(test_blur PRIVATE blur_lib GTest::gtest_main)
+target_compile_options(test_blur PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Werror>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+)
 include(GoogleTest)
 gtest_discover_tests(test_blur)

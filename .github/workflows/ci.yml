@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc-14
+            cc: gcc-14
+            cxx: g++-14
+          - compiler: clang-18
+            cc: clang-18
+            cxx: clang++-18
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            ${{ matrix.compiler == 'gcc-14' && 'gcc-14 g++-14' || 'clang-18 clang++-18' }} \
+            cmake \
+            qt6-base-dev \
+            qt6-concurrent-dev \
+            libgtest-dev
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: |
+          QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+
+  cppcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get update -q && sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        run: |
+          cppcheck \
+            --enable=all \
+            --std=c++20 \
+            --suppress=missingInclude \
+            --suppress=missingIncludeSystem \
+            --suppress=unknownMacro \
+            --suppress=useStlAlgorithm \
+            --suppress=checkersReport \
+            --error-exitcode=1 \
+            --quiet \
+            src/ include/ tests/
