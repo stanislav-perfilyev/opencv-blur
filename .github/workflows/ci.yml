@@ -30,7 +30,6 @@ jobs:
             ${{ matrix.compiler == 'gcc-14' && 'gcc-14 g++-14' || 'clang-18 clang++-18' }} \
             cmake \
             qt6-base-dev \
-            qt6-concurrent-dev \
             libgtest-dev
 
       - name: Configure
@@ -63,7 +62,7 @@ jobs:
             --suppress=missingInclude \
             --suppress=missingIncludeSystem \
             --suppress=unknownMacro \
-            --suppress=useStlAlgorithm \
+            --suppress=unmatchedSuppression \
             --suppress=checkersReport \
             --error-exitcode=1 \
             --quiet \
