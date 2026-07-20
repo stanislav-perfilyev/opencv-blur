@@ -25,7 +25,7 @@ find_package(Qt6 COMPONENTS Core Gui Widgets Concurrent REQUIRED)
 qt_add_library(blur_lib STATIC
     src/mainwindow.cpp
     include/mainwindow.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/Blur.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/blur.ui
 )
 target_include_directories(blur_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(blur_lib PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent)

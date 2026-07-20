@@ -16,7 +16,7 @@ Q_LOGGING_CATEGORY(lcBlur, "app.blur")
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , ui_(new Ui::MainWindow)
+    , ui_(std::make_unique<Ui::MainWindow>())
 {
     ui_->setupUi(this);
     setAttribute(Qt::WA_QuitOnClose, true);
@@ -33,7 +33,6 @@ MainWindow::~MainWindow()
     // Wait for any in-flight blur to finish before destroying the UI.
     if (blurFuture_.isRunning())
         blurFuture_.waitForFinished();
-    delete ui_;
 }
 
 // ── Slots ──────────────────────────────────────────────────────────────────

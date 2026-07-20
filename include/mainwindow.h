@@ -5,6 +5,8 @@
 #include <QImage>
 #include <QMainWindow>
 
+#include <memory>
+
 Q_DECLARE_LOGGING_CATEGORY(lcBlur)
 
 namespace Ui {
@@ -69,9 +71,9 @@ private:
      */
     void updateDisplayImage(int blurRadius);
 
-    Ui::MainWindow           *ui_;           ///< UI pointer (owned)
+    std::unique_ptr<Ui::MainWindow> ui_;      ///< UI pointer (owned)
     QImage                    sourceImage_;  ///< Loaded source image
     QFuture<void>             blurFuture_;  ///< Handle to the current async blur task
 };
 
-#endif // MAINWINDOW_H
+#en

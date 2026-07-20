@@ -6,8 +6,19 @@ Qt6 desktop application that applies a box-blur effect to images. The blur is a 
 
 - `include/mainwindow.h` / `src/mainwindow.cpp` — `MainWindow` with `static QImage blurImage(QImage, int radius)` (horizontal + vertical pass via `QtConcurrent`)
 - `src/main.cpp` — application entry point
-- `Blur.ui` — Qt Designer UI (browse button + blur-radius slider)
+- `blur.ui` — Qt Designer UI (browse button + blur-radius slider)
 - `tests/test_blur.cpp` — GTest suite; operates on `QImage` directly, no display required
+
+## Usage
+
+Launch the application:
+
+```bash
+QT_QPA_PLATFORM=offscreen ./build/Blur   # headless/CI
+./build/Blur                             # desktop
+```
+
+Browse for an image file with the **Browse** button, then drag the slider to adjust the blur radius (0–10).
 
 ## Build
 
