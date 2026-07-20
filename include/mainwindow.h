@@ -3,6 +3,7 @@
 
 #include <QFuture>
 #include <QImage>
+#include <QLoggingCategory>
 #include <QMainWindow>
 
 #include <memory>
