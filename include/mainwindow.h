@@ -76,4 +76,4 @@ private:
     QFuture<void>             blurFuture_;  ///< Handle to the current async blur task
 };
 
-#en
+#endif // MAINWINDOW_H
